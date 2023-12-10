@@ -114,7 +114,7 @@ class Thingable
     }
 
     /**
-     * Função que verifica se determinado site possui consumo em referido INSTANTE (datatime)
+     * Função que verifica se determinado site possui consumo em referido INSTANTE (datetime)
      * na view [view_client_consumption]
      */
     public function verifyConsumption($site_id, $date)
@@ -124,7 +124,7 @@ class Thingable
             $pdo = $this->conn_class;
             $sql  = "SELECT * FROM telemetria.view_client_consumption WHERE v_site_id = ? " .
                 " and to_char(v_consumption_datetime_message, 'YYYY-MM-DD') = '{$date[0]}' " .
-                " and to_char(v_consumption_time_message, 'HH24') = '{$date[1]}' ";
+                " and to_char(v_consumption_time_message, 'HH24:MI') = '{$date[1]}' ";
             $stm = $pdo->prepare($sql);
             $stm->bindValue(1, $site_id);
             $stm->execute();
