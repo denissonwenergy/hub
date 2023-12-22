@@ -10,6 +10,7 @@ function getDataAPI()
     // 1. Implementar aqui código que conecta na API da thingable e retorna lista com mensagens enviadas no dia de hoje
     // 2. Ficar atento ao processo de paginação dos resultados porque é importante
     // 3. Recomenda-se criar um [array] com todos os dados, de todas as páginas da API Rest, e retornar ao final deste função
+    // 4. Lembrar de implementar questão dos feriados no PONTA/FORA PONTA 
     $return[] = ["gateway_serial_number" => 0, "meter_serial_number" => 0, "time" => 1702243800000, "energy_active_kwh" => 0, "energy_reactive_kvarh" => 0, "demand_active_kw" => 0, "demand_reactive_kvar" => 0];
     return $return;
 }

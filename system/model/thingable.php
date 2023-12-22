@@ -40,13 +40,20 @@ class Thingable
 
 
     /**
-     * Função que verifica sites ativos, apenas hardware: KHOMP e seus respectivos devices de energia e retorna lista
+     * Função que verifica sites ativos de energia vinculados ao Santander
      */
-    function getAllSitesDevices()
+    function getAllSitesDevicesSantander()
     {
         try {
             $pdo = $this->conn_class;
-            $sql  = "SELECT * FROM telemetria.view_device_site_energy";
+            $sql  = "select * from telemetria.view_device_site_energy vdse " .
+            " inner join telemetria.branch_site bs on(vdse.site_id = bs.fk_site_id) " .
+            " inner join telemetria.branch b on(bs.fk_branch_id = b.branch_id) " .
+            " inner join telemetria.client_branch cb on(b.branch_id = cb.fk_branch_id) " .
+            " inner join telemetria.client c on(cb.fk_client_id = c.client_id) " .
+            " inner join telemetria.device_hardware dh on(vdse.device_id = dh.fk_device_id) " .
+			" inner join telemetria.hardware h on(dh.fk_hardware_id = h.hardware_id) " .
+            " where c.client_id = 4;";
             $stm = $pdo->prepare($sql);            
             $stm->execute();
             $result = $stm->fetchAll(PDO::FETCH_ASSOC);
@@ -58,8 +65,8 @@ class Thingable
             $pdo = null;
         } catch (Exception $e) {
             $erro = new Erro();
-            $erro->registerErroJSON($e->getMessage(), 'ERRO getAllSitesDevices()', './sigfox-monitor-error.json');
-            echo 'Erro encontrado (getAllSitesDevices()): ',  $e->getMessage(), "\n", $e->getLine(), "\n";
+            $erro->registerErroJSON($e->getMessage(), 'ERRO getAllSitesDevicesSantander()', './sigfox-monitor-error.json');
+            echo 'Erro encontrado (getAllSitesDevicesSantander()): ',  $e->getMessage(), "\n", $e->getLine(), "\n";
         }
     }
 
@@ -121,10 +128,11 @@ class Thingable
     {
         try {
             $date = explode(" ", $date);
+            $date_hours = substr(trim($date[1]), 0, 5);
             $pdo = $this->conn_class;
             $sql  = "SELECT * FROM telemetria.view_client_consumption WHERE v_site_id = ? " .
                 " and to_char(v_consumption_datetime_message, 'YYYY-MM-DD') = '{$date[0]}' " .
-                " and to_char(v_consumption_time_message, 'HH24:MI') = '{$date[1]}' ";
+                " and to_char(v_consumption_time_message, 'HH24:MI') = '{$date_hours}' ";
             $stm = $pdo->prepare($sql);
             $stm->bindValue(1, $site_id);
             $stm->execute();
@@ -186,15 +194,14 @@ class Thingable
             $date = explode(" ", $date);
             $pdo = $this->conn_class;
             $sql  = "SELECT * FROM telemetria.view_client_consumption WHERE v_site_id = ? " .
-                " and to_char(v_consumption_datetime_message, 'YYYY-MM-DD') = '{$date[0]}' " .
-                " and to_char(v_consumption_time_message, 'HH24') = '{$date[1]}' ";
+                " ORDER BY v_consumption_datetime DESC LIMIT 1  ; ";
             $stm = $pdo->prepare($sql);
             $stm->bindValue(1, $site_id);
             $stm->execute();
             $pdo = null;
             return $stm->fetchAll(PDO::FETCH_ASSOC);
         } catch (Exception $e) {
-            echo 'Erro encontrado (verifyConsumption()): ',  $e->getMessage(), "\n", $e->getLine(), "\n";
+            echo 'Erro encontrado (getLastConsumption()): ',  $e->getMessage(), "\n", $e->getLine(), "\n";
         }
     }
 
@@ -228,7 +235,7 @@ class Thingable
     /**
      * Função que cadastra mensagens dos devices no banco de dados (tabela: message)
      */
-    public function registerKhompMessage($device_id, $time_message, $data, $seqNumber, $array_data_message)
+    public function registerEnergyMessage($device_id, $time_message, $data, $seqNumber, $array_data_message)
     {
 
         try {
@@ -246,26 +253,27 @@ class Thingable
             $pdo = null;
 
             if ($result == true) {
-                $consumption_id = $this->registerConsumptionWater($getLastId, $array_data_message);
+                $consumption_id = $this->registerConsumptionEnergy($getLastId, $array_data_message);
                 $site_id = $this->getSiteIDByDevice($device_id);
                 $this->registerSiteConsumption($site_id, $consumption_id);
                 $this->registerDeviceMessage($device_id, $getLastId);
             }
         } catch (Exception $e) {
             $erro = new Erro();
-            $erro->registerErroJSON($e->getMessage(), 'ERRO registerKhompMessage()', './sigfox-monitor-error.json');
-            echo 'Erro encontrado (registerKhompMessage()): ',  $e->getMessage(), "\n", $e->getLine(), "\n";
+            $erro->registerErroJSON($e->getMessage(), 'ERRO registerEnergyMessage()', './sigfox-monitor-error.json');
+            echo 'Erro encontrado (registerEnergyMessage()): ',  $e->getMessage(), "\n", $e->getLine(), "\n";
         }
     }
 
     /**
      * Função que cadastra mensagens dos devices no banco de dados (tabela: consumption)
      */
-    public function registerConsumptionWater($lastInsertIdMessage, $array_data_message)
+    public function registerConsumptionEnergy($lastInsertIdMessage, $array_data_message)
     {
         try {
             $pdo = $this->conn_class;
-            $sql = 'INSERT INTO telemetria.consumption(consumption_date_register, consumption_value,  consumption_reverse_pules, consumption_circuit_temperature, consumption_battery_voltage, consumption_flags, consumption_datetime, consumption_type, consumption_full_value ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)';
+            $sql = 'INSERT INTO telemetria.consumption(consumption_date_register, consumption_value,  consumption_reverse_pules, consumption_circuit_temperature, consumption_battery_voltage, consumption_flags, consumption_datetime, consumption_type, consumption_full_value, consumption_energy_active_kwh, consumption_energy_active_peak_kwh, consumption_energy_active_out_peak_kwh, consumption_energy_reactive_kvarh, consumption_energy_reactive_peak_kvarh, consumption_energy_reactive_out_peak_kvarh, consumption_demand_active_kw, consumption_demand_active_peak_kw, consumption_demand_active_out_peak_kw, consumption_demand_reactive_kvar, consumption_demand_reactive_peak_kvar, consumption_demand_reactive_out_peak_kvar, consumption_full_energy_active_kwh, consumption_full_energy_reactive_kvarh, consumption_full_demand_active_kw, consumption_full_demand_reactive_kvar
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)';
             $stm = $pdo->prepare($sql);
             $stm->bindValue(1, 'now()');
             $stm->bindValue(2, $array_data_message[0]);
@@ -274,8 +282,24 @@ class Thingable
             $stm->bindValue(5, $array_data_message[3]);
             $stm->bindValue(6, $array_data_message[4]);
             $stm->bindValue(7, $array_data_message[5]);
-            $stm->bindValue(8, 1);
+            $stm->bindValue(8, 2);
             $stm->bindValue(9, $array_data_message[6]);
+            $stm->bindValue(10, $array_data_message[7]);
+            $stm->bindValue(11, $array_data_message[8]);
+            $stm->bindValue(12, $array_data_message[9]);
+            $stm->bindValue(13, $array_data_message[10]);
+            $stm->bindValue(14, $array_data_message[11]);
+            $stm->bindValue(15, $array_data_message[12]);
+            $stm->bindValue(16, $array_data_message[13]);
+            $stm->bindValue(17, $array_data_message[14]);
+            $stm->bindValue(18, $array_data_message[15]);
+            $stm->bindValue(19, $array_data_message[16]);
+            $stm->bindValue(20, $array_data_message[17]);
+            $stm->bindValue(21, $array_data_message[18]);
+            $stm->bindValue(22, $array_data_message[19]);
+            $stm->bindValue(23, $array_data_message[20]);
+            $stm->bindValue(24, $array_data_message[21]);
+            $stm->bindValue(25, $array_data_message[22]);
             $result = $stm->execute();
             $getLastId = $pdo->lastInsertId();
             $pdo = null;
@@ -285,8 +309,8 @@ class Thingable
             }
         } catch (Exception $e) {
             $erro = new Erro();
-            $erro->registerErroJSON($e->getMessage(), 'ERRO registerConsumptionWater()', './sigfox-monitor-error.json');
-            echo 'Erro encontrado (registerConsumptionWater()): ',  $e->getMessage(), "\n", $e->getLine(), "\n";
+            $erro->registerErroJSON($e->getMessage(), 'ERRO registerConsumptionEnergy()', './sigfox-monitor-error.json');
+            echo 'Erro encontrado (registerConsumptionEnergy()): ',  $e->getMessage(), "\n", $e->getLine(), "\n";
         }
     }
 

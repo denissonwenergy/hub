@@ -3,17 +3,17 @@
 /**
  * Função que envia messagens dos hardwares khomp por e-mail
  * **/
-function sendEmail($message, $email)
+function sendEmail($message, $email, $subject)
 {
 
   try {
 
     if(file_exists('./../vendor/autoload.php')){
-      require('../../vendor/autoload.php');
-      require('../../vendor/phpmailer/phpmailer/src/PHPMailer.php');
+      require_once('../../vendor/autoload.php');
+      require_once('../../vendor/phpmailer/phpmailer/src/PHPMailer.php');
     }else{
-      require('vendor/autoload.php');
-      require('vendor/phpmailer/phpmailer/src/PHPMailer.php');
+      require_once('vendor/autoload.php');
+      require_once('vendor/phpmailer/phpmailer/src/PHPMailer.php');
     }
 
     $mail = new PHPMailer\PHPMailer\PHPMailer();
@@ -25,9 +25,9 @@ function sendEmail($message, $email)
     $mail->SMTPAuth = true;
     $mail->Username = "robogreen@wenergy.com.br";
     $mail->Password = "W@energy#9080";
-    $mail->setFrom('no-reply@wenergy.com.br', 'Mensagem Conector Khomp App - Telemetria');
+    $mail->setFrom('no-reply@wenergy.com.br', $subject);
     $mail->addAddress($email, mb_convert_encoding('Você', 'ISO-8859-1', 'UTF-8'));
-    $mail->Subject = mb_convert_encoding('Modo Assíncrono by Denisson Anjos', 'ISO-8859-1', 'UTF-8');
+    $mail->Subject = mb_convert_encoding($subject, 'ISO-8859-1', 'UTF-8');
     $mail->msgHTML(mb_convert_encoding($message, 'ISO-8859-1', 'UTF-8'));
 
     if (!$mail->send()) {
