@@ -1,8 +1,8 @@
 <?php
 
-//Homologação
-$host='hml-db-wenergy.postgres.database.azure.com';
+//Produção
+$host='prd-db-wenergy.postgres.database.azure.com';
 $dbname='telemetria';
-$username='wenergydbhml';
-$password='XB53dgaUMQnl@i1#';
+$username='wenergydbprd';
+$password='XB53dgai1#UMQnl@';
 $port='5432';
