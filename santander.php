@@ -207,9 +207,12 @@ function processEnergy()
 
             }
 
-            
-           
-            echo "Site:{$cont} - Medidor: {$meter_serial_number} / {$meter_description} - Porta RS485: {$port_rs485} - Instante: {$date} - Energia Ativa: {$api_energy_active_full} - Energia Reativa: {$api_energy_reactive_full} - Demanda Ativa: {$api_demand_active_full} - Demanda Reativa: {$api_demand_reactive_full}" . PHP_EOL;
+            $result = $thingable->getSiteDevice($device_id);
+            $site_name = "Não identificado";
+            if(sizeof($result)>0){
+                $site_name = $result[0]["site_name"];
+            }
+            echo "Item: {$cont} - Site: {$site_name} - Medidor: {$meter_serial_number} / {$meter_description} - Porta RS485: {$port_rs485} - Instante: {$date} - Energia Ativa: {$api_energy_active_full} - Energia Reativa: {$api_energy_reactive_full} - Demanda Ativa: {$api_demand_active_full} - Demanda Reativa: {$api_demand_reactive_full}" . PHP_EOL;
 
             //if ($cont == 1) {
             //var_dump($data);
