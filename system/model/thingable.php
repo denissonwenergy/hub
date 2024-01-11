@@ -272,8 +272,8 @@ class Thingable
     {
         try {
             $pdo = $this->conn_class;
-            $sql = 'INSERT INTO telemetria.consumption(consumption_date_register, consumption_value,  consumption_reverse_pules, consumption_circuit_temperature, consumption_battery_voltage, consumption_flags, consumption_datetime, consumption_type, consumption_full_value, consumption_energy_active_kwh, consumption_energy_active_peak_kwh, consumption_energy_active_out_peak_kwh, consumption_energy_reactive_kvarh, consumption_energy_reactive_peak_kvarh, consumption_energy_reactive_out_peak_kvarh, consumption_demand_active_kw, consumption_demand_active_peak_kw, consumption_demand_active_out_peak_kw, consumption_demand_reactive_kvar, consumption_demand_reactive_peak_kvar, consumption_demand_reactive_out_peak_kvar, consumption_full_energy_active_kwh, consumption_full_energy_reactive_kvarh, consumption_full_demand_active_kw, consumption_full_demand_reactive_kvar
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)';
+            $sql = 'INSERT INTO telemetria.consumption(consumption_date_register, consumption_value,  consumption_reverse_pules, consumption_circuit_temperature, consumption_battery_voltage, consumption_flags, consumption_datetime, consumption_type, consumption_full_value, consumption_energy_active_kwh, consumption_energy_active_peak_kwh, consumption_energy_active_out_peak_kwh, consumption_energy_reactive_kvarh, consumption_energy_reactive_peak_kvarh, consumption_energy_reactive_out_peak_kvarh, consumption_demand_active_kw, consumption_demand_active_peak_kw, consumption_demand_active_out_peak_kw, consumption_demand_reactive_kvar, consumption_demand_reactive_peak_kvar, consumption_demand_reactive_out_peak_kvar, consumption_full_energy_active_kwh, consumption_full_energy_reactive_kvarh, consumption_full_demand_active_kw, consumption_full_demand_reactive_kvar, consumption_power_factor
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)';
             $stm = $pdo->prepare($sql);
             $stm->bindValue(1, 'now()');
             $stm->bindValue(2, $array_data_message[0]);
@@ -300,6 +300,7 @@ class Thingable
             $stm->bindValue(23, $array_data_message[20]);
             $stm->bindValue(24, $array_data_message[21]);
             $stm->bindValue(25, $array_data_message[22]);
+            $stm->bindValue(26, $array_data_message[23]);
             $result = $stm->execute();
             $getLastId = $pdo->lastInsertId();
             $pdo = null;
