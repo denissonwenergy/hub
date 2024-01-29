@@ -337,6 +337,7 @@ function formatDeviceID($str)
  */
 function strDatetimeSearch($str)
 {
+    echo str_replace("T", " ", substr(trim($str), 0, 16)) . PHP_EOL;
     return str_replace("T", " ", substr(trim($str), 0, 16));
     //return substr(trim($str), 0, 16);
 }
