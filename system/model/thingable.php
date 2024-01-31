@@ -53,7 +53,7 @@ class Thingable
             " inner join telemetria.client c on(cb.fk_client_id = c.client_id) " .
             " inner join telemetria.device_hardware dh on(vdse.device_id = dh.fk_device_id) " .
 			" inner join telemetria.hardware h on(dh.fk_hardware_id = h.hardware_id) " .
-            " where c.client_id = 4;";
+            " where c.client_id = 4 and site_device_end_of_link is null;";
             $stm = $pdo->prepare($sql);            
             $stm->execute();
             $result = $stm->fetchAll(PDO::FETCH_ASSOC);
