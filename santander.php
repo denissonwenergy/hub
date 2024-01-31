@@ -43,6 +43,8 @@ function getDataAPI($device_id, $type_device)
         $return[0] = $array;
     }
 
+    var_dump($return);
+
     curl_close($curl);
 
     // 1. Implementar aqui código que conecta na API da thingable e retorna lista com mensagens enviadas no dia de hoje
@@ -79,6 +81,9 @@ function processEnergy()
                 break;
             case 8:
                 $type_device = "SCHN";
+                break;
+            case 9:
+                $type_device = "KHOMP";
                 break;
         }
 
