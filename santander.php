@@ -20,6 +20,8 @@ function getDataAPI($device_id, $type_device)
 
     $param_energy_active = "{$type_device}" . "%3A" . "{$device_id}" . "%3A" . "EA%2B"; //EX: KRON:DEVICE:PARAMETRO -> ENERGIA ATIVA
     $param_energy_reactive = "{$type_device}" . "%3A" . "{$device_id}" . "%3A" . "ER%2B"; //EX: KRON:DEVICE:PARAMETRO  -> ENERGIA REATIVA
+    $param_energy_active_ = "{$type_device}" . "%3A" . "{$device_id}" . "%3A" . "EA"; //EX: KRON:DEVICE:PARAMETRO -> ENERGIA ATIVA
+    $param_energy_reactive_ = "{$type_device}" . "%3A" . "{$device_id}" . "%3A" . "ER"; //EX: KRON:DEVICE:PARAMETRO  -> ENERGIA REATIVA
     $param_demand_active = "{$type_device}" . "%3A" . "{$device_id}" . "%3A" . "DA"; //EX: KRON:DEVICE:PARAMETRO -> DEMANDA ATIVA
     $param_demand_reactive = "{$type_device}" . "%3A" . "{$device_id}" . "%3A" . "DR"; //EX: KRON:DEVICE:PARAMETRO -> DEMANDA REATIVA
     $param_power_factor = "{$type_device}" . "%3A" . "{$device_id}" . "%3A" . "FP"; //EX: KRON:DEVICE:PARAMETRO -> FATOR DE POTÊNCIA
@@ -27,14 +29,14 @@ function getDataAPI($device_id, $type_device)
     $param_apparent_power = "{$type_device}" . "%3A" . "{$device_id}" . "%3A" . "S0"; //EX: KRON:DEVICE:PARAMETRO -> POTÊNCIA APARENTE
 
     curl_setopt($curl, CURLOPT_HTTPHEADER, $headers);
-    curl_setopt($curl, CURLOPT_URL, "https://infra-prodv0.thingable.com/rtd-ws/tag-values?tags={$param_energy_active}&tags={$param_energy_reactive}&tags={$param_demand_active}&tags={$param_demand_reactive}&tags={$param_power_factor}&tags={$param_active_power}&tags={$param_apparent_power}");
+    curl_setopt($curl, CURLOPT_URL, "https://infra-prodv0.thingable.com/rtd-ws/tag-values?tags={$param_energy_active}&tags={$param_energy_reactive}&tags={$param_energy_active_}&tags={$param_energy_reactive_}&tags={$param_demand_active}&tags={$param_demand_reactive}&tags={$param_power_factor}&tags={$param_active_power}&tags={$param_apparent_power}");
     curl_setopt($curl, CURLOPT_CUSTOMREQUEST, "GET");
     curl_setopt($curl, CURLOPT_RETURNTRANSFER, true);
 
     $response = curl_exec($curl);
 
 
-      $return = [];
+    $return = [];
 
     $array = json_decode($response, true);
     if (array_key_exists("message", $array)) {
@@ -91,164 +93,177 @@ function processEnergy()
         //var_dump($data_);
 
 
-        foreach ($data_ as $data) {
+        if (sizeof($data_) > 0) {
+            foreach ($data_ as $data) {
 
-            $cont++;
-            $size = sizeof($data);
-            $api_energy_active_full = 0;
-            $api_energy_reactive_full = 0;
-            $api_demand_active_full = 0;
-            $api_demand_reactive_full = 0;
-            $api_power_factor = 0;
-            $api_active_power = 0;
-            $api_apparent_power = 0;
-            $value_energy_active = 0;
-            $value_energy_active_peak = 0;
-            $value_energy_active_out_peak = 0;
-            $value_energy_reactive = 0;
-            $value_energy_reactive_peak = 0;
-            $value_energy_reactive_out_peak = 0;
-            $value_demand_active = 0;
-            $value_demand_active_peak = 0;
-            $value_demand_active_outpeak = 0;
-            $value_demand_reactive = 0;
-            $value_demand_reactive_peak = 0;
-            $value_demand_reactive_out_peak = 0;
-            $value_power_factor = 0;
-            $meter_description =  null;
-            $meter_serial_number = null;
-            $port_rs485 = null;
-            $instante =  null;
-            $tag = null;
+                $cont++;
+                $size = sizeof($data);
+                $api_energy_active_full = 0;
+                $api_energy_reactive_full = 0;
+                $api_demand_active_full = 0;
+                $api_demand_reactive_full = 0;
+                $api_power_factor = 0;
+                $api_active_power = 0;
+                $api_apparent_power = 0;
+                $value_energy_active = 0;
+                $value_energy_active_peak = 0;
+                $value_energy_active_out_peak = 0;
+                $value_energy_reactive = 0;
+                $value_energy_reactive_peak = 0;
+                $value_energy_reactive_out_peak = 0;
+                $value_demand_active = 0;
+                $value_demand_active_peak = 0;
+                $value_demand_active_outpeak = 0;
+                $value_demand_reactive = 0;
+                $value_demand_reactive_peak = 0;
+                $value_demand_reactive_out_peak = 0;
+                $value_power_factor = 0;
+                $meter_description =  null;
+                $meter_serial_number = null;
+                $port_rs485 = null;
+                $instante =  null;
+                $tag = null;
 
 
-            for ($i = 0; $i < $size; $i++) {
+                for ($i = 0; $i < $size; $i++) {
 
-                $tag = $data[$i]["tag"];
-                $tag_ = explode(":", $tag);
-                $meter_serial_number = $tag_[1];
-                $meter_description = $data[$i]["meta"]["manufacturer"];
-                $port_rs485 = $data[$i]["meta"]["identification"];
-                $instante = $data[$i]["ts"];
+                    $tag = $data[$i]["tag"];
+                    $tag_ = explode(":", $tag);
+                    $meter_serial_number = $tag_[1];
+                    $meter_description = $data[$i]["meta"]["manufacturer"];
+                    $port_rs485 = $data[$i]["meta"]["identification"];
+                    $instante = $data[$i]["ts"];
 
-                if (strpos($tag, ":EA+")) {
-                    $api_energy_active_full = floatval($data[$i]["value"]);
-                } else if (strpos($tag, ":ER+")) {
-                    $api_energy_reactive_full = floatval($data[$i]["value"]);
-                } else if (strpos($tag, ":DA")) {
-                    $api_demand_active_full = floatval($data[$i]["value"]);
-                } else if (strpos($tag, ":DR")) {
-                    $api_demand_reactive_full = floatval($data[$i]["value"]);
-                }else if(strpos($tag, ":FP")){
-                    $api_power_factor = floatval($data[$i]["value"]);
-                }else if(strpos($tag, ":P0")){
-                    $api_active_power = floatval($data[$i]["value"]);
-                }else if(strpos($tag, ":S0")){
-                    $api_apparent_power = floatval($data[$i]["value"]);
-                }
-            }
-
-            //Validando fator de potência {FP = KW / KVA}
-            if($api_power_factor != 0){
-                $value_power_factor = $api_power_factor;
-            }else{
-                //echo "POTÊNCIA ATIVA: {$api_active_power} - POTÊNCIA APARENTE: {$api_apparent_power}" . PHP_EOL;
-                if($api_apparent_power != 0)                
-                    $value_power_factor = $api_active_power / $api_apparent_power;
-            }
-
-            $site_id = $thingable->getSiteIDByDevice(formatDeviceID($meter_serial_number));
-            $date =  convertDatetimeUTCBR(strDatetimeSearch($instante));
-            $result =  $thingable->verifyConsumption($site_id, $date);
-
-            //var_dump($result);
-            //echo "Site: {$site_id} e Instante: {$date}" . PHP_EOL;
-
-            //Verifica se já existe consumo para esse [site_id] e [date]
-            if (sizeof($result) <= 0) {
-                //Pega o último consumo no database
-                $result = $thingable->getLastConsumption($site_id, $date);
-                //Se houver registro no banco de dados
-                if (sizeof($result) > 0) {
-
-                    $db_energy_active_full = floatval($result[0]["v_consumption_full_energy_active_kwh"]);
-                    $db_energy_reactive_full = floatval($result[0]["v_consumption_full_energy_reactive_kvarh"]);
-                    $db_demand_active_full = floatval($result[0]["v_consumption_full_demand_active_kw"]);
-                    $db_demand_reactive_full = floatval($result[0]["v_consumption_full_demand_reactive_kvar"]);
-
-                    if ($db_energy_active_full != null) {
-
-                        $value_energy_active = $api_energy_active_full - $db_energy_active_full;
-                        $value_energy_reactive = $api_energy_reactive_full - $db_energy_reactive_full;
-                        $value_demand_active = $api_demand_active_full - $db_demand_active_full;
-                        $value_demand_reactive = $api_demand_reactive_full - $db_demand_reactive_full;
-
-                        if (verfiyTimePeak(strDatetimeSearch($date)) === true) {
-                            //Ponta
-                            $value_energy_active_peak = $value_energy_active;
-                            $value_energy_reactive_peak = $value_energy_reactive;
-                            $value_demand_active_peak = $value_demand_active;
-                            $value_demand_reactive_peak = $value_demand_reactive;
-                        } else {
-                            //Fora ponta
-                            $value_energy_active_out_peak = $value_energy_active;
-                            $value_energy_reactive_out_peak = $value_energy_reactive;
-                            $value_demand_active_outpeak = $value_demand_active;
-                            $value_demand_reactive_out_peak = $value_demand_reactive;
-                        }
+                    if (strpos($tag, ":EA")) {
+                        $api_energy_active_full = floatval($data[$i]["value"]);
+                    } else if (strpos($tag, ":EA+")) {
+                        $api_energy_active_full = floatval($data[$i]["value"]);
+                    } else if (strpos($tag, ":ER")) {
+                        $api_energy_reactive_full = floatval($data[$i]["value"]);
+                    } else if (strpos($tag, ":ER+")) {
+                        $api_energy_reactive_full = floatval($data[$i]["value"]);
+                    } else if (strpos($tag, ":DA")) {
+                        $api_demand_active_full = floatval($data[$i]["value"]);
+                    } else if (strpos($tag, ":DR")) {
+                        $api_demand_reactive_full = floatval($data[$i]["value"]);
+                    } else if (strpos($tag, ":FP")) {
+                        $api_power_factor = floatval($data[$i]["value"]);
+                    } else if (strpos($tag, ":P0")) {
+                        $api_active_power = floatval($data[$i]["value"]);
+                    } else if (strpos($tag, ":S0")) {
+                        $api_apparent_power = floatval($data[$i]["value"]);
                     }
-                } else {
-
-                    //Preencher array com registros aqui $array_data = [];
-
                 }
 
+                //Validando fator de potência {FP = KW / KVA}
+                if ($api_power_factor != 0) {
+                    $value_power_factor = $api_power_factor;
+                } else {
+                    //echo "POTÊNCIA ATIVA: {$api_active_power} - POTÊNCIA APARENTE: {$api_apparent_power}" . PHP_EOL;
+                    if ($api_apparent_power != 0)
+                        $value_power_factor = $api_active_power / $api_apparent_power;
+                }
 
-                //echo "BR:" . convertDatetimeUTCBR(strDatetimeSearch($date)) . PHP_EOL;
+                $site_id = $thingable->getSiteIDByDevice(formatDeviceID($meter_serial_number));
+                $date =  convertDatetimeUTCBR(strDatetimeSearch($instante));
+                $result =  $thingable->verifyConsumption($site_id, $date);
 
-                $array_data_message = [
-                    $value_energy_active,
-                    null,
-                    null,
-                    null,
-                    null,
-                    $date,
-                    null,
-                    $value_energy_active,
-                    $value_energy_active_peak,
-                    $value_energy_active_out_peak,
-                    $value_energy_reactive,
-                    $value_energy_reactive_peak,
-                    $value_energy_reactive_out_peak,
-                    $value_demand_active,
-                    $value_demand_active_peak,
-                    $value_demand_active_outpeak,
-                    $value_demand_reactive,
-                    $value_demand_reactive_peak,
-                    $value_demand_reactive_out_peak,
-                    $api_energy_active_full,
-                    $api_energy_reactive_full,
-                    $api_demand_active_full,
-                    $api_demand_reactive_full,
-                    $value_power_factor
-                ];
-    
-                //FAZER INSERT AQUI
-                $thingable->registerEnergyMessage(formatDeviceID($meter_serial_number), strtotime(strDatetimeSearch($date)), $tag, $port_rs485, $array_data_message);
+                //var_dump($result);
+                //echo "Site: {$site_id} e Instante: {$date}" . PHP_EOL;
 
+                //Verifica se já existe consumo para esse [site_id] e [date]
+                if (sizeof($result) <= 0) {
+                    //Pega o último consumo no database
+                    $result = $thingable->getLastConsumption($site_id, $date);
+                    //Se houver registro no banco de dados
+                    if (sizeof($result) > 0) {
+
+                        $db_energy_active_full = floatval($result[0]["v_consumption_full_energy_active_kwh"]);
+                        $db_energy_reactive_full = floatval($result[0]["v_consumption_full_energy_reactive_kvarh"]);
+                        $db_demand_active_full = floatval($result[0]["v_consumption_full_demand_active_kw"]);
+                        $db_demand_reactive_full = floatval($result[0]["v_consumption_full_demand_reactive_kvar"]);
+
+                        if ($db_energy_active_full != null) {
+
+                            if ($type_device != "KHOMP") {
+                                $value_energy_active = $api_energy_active_full - $db_energy_active_full;
+                                $value_energy_reactive = $api_energy_reactive_full - $db_energy_reactive_full;
+                                $value_demand_active = $api_demand_active_full - $db_demand_active_full;
+                                $value_demand_reactive = $api_demand_reactive_full - $db_demand_reactive_full;
+                            } else {
+                                $value_energy_active = $api_energy_active_full;
+                                $value_energy_reactive = $api_energy_reactive_full;
+                                $value_demand_active = $api_demand_active_full;
+                                $value_demand_reactive = $api_demand_reactive_full;
+                            }
+
+                            if (verfiyTimePeak(strDatetimeSearch($date)) === true) {
+                                //Ponta
+                                $value_energy_active_peak = $value_energy_active;
+                                $value_energy_reactive_peak = $value_energy_reactive;
+                                $value_demand_active_peak = $value_demand_active;
+                                $value_demand_reactive_peak = $value_demand_reactive;
+                            } else {
+                                //Fora ponta
+                                $value_energy_active_out_peak = $value_energy_active;
+                                $value_energy_reactive_out_peak = $value_energy_reactive;
+                                $value_demand_active_outpeak = $value_demand_active;
+                                $value_demand_reactive_out_peak = $value_demand_reactive;
+                            }
+                        }
+                    } else {
+
+                        //Preencher array com registros aqui $array_data = [];
+
+                    }
+
+
+                    //echo "BR:" . convertDatetimeUTCBR(strDatetimeSearch($date)) . PHP_EOL;
+
+                    $array_data_message = [
+                        $value_energy_active,
+                        null,
+                        null,
+                        null,
+                        null,
+                        $date,
+                        null,
+                        $value_energy_active,
+                        $value_energy_active_peak,
+                        $value_energy_active_out_peak,
+                        $value_energy_reactive,
+                        $value_energy_reactive_peak,
+                        $value_energy_reactive_out_peak,
+                        $value_demand_active,
+                        $value_demand_active_peak,
+                        $value_demand_active_outpeak,
+                        $value_demand_reactive,
+                        $value_demand_reactive_peak,
+                        $value_demand_reactive_out_peak,
+                        $api_energy_active_full,
+                        $api_energy_reactive_full,
+                        $api_demand_active_full,
+                        $api_demand_reactive_full,
+                        $value_power_factor
+                    ];
+
+                    //FAZER INSERT AQUI
+                    $thingable->registerEnergyMessage(formatDeviceID($meter_serial_number), strtotime(strDatetimeSearch($date)), $tag, $port_rs485, $array_data_message);
+                }
+
+                $result = $thingable->getSiteDevice($device_id);
+                $site_name = "Não identificado";
+                if (sizeof($result) > 0) {
+                    $site_name = $result[0]["site_name"];
+                }
+
+                //if ($type_device == "KHOMP")
+                echo "Item: {$cont} - Site: {$site_name} - Medidor: {$meter_serial_number} / {$meter_description} - Porta RS485: {$port_rs485} - Instante: {$date} - Energia Ativa: {$api_energy_active_full} - Energia Reativa: {$api_energy_reactive_full} - Demanda Ativa: {$api_demand_active_full} - Demanda Reativa: {$api_demand_reactive_full} - Fator de Potência: {$value_power_factor}" . PHP_EOL;
+
+                //if ($cont == 1) {
+                //var_dump($data);
+                //}
             }
-
-            $result = $thingable->getSiteDevice($device_id);
-            $site_name = "Não identificado";
-            if(sizeof($result)>0){
-                $site_name = $result[0]["site_name"];
-            }
-           
-            echo "Item: {$cont} - Site: {$site_name} - Medidor: {$meter_serial_number} / {$meter_description} - Porta RS485: {$port_rs485} - Instante: {$date} - Energia Ativa: {$api_energy_active_full} - Energia Reativa: {$api_energy_reactive_full} - Demanda Ativa: {$api_demand_active_full} - Demanda Reativa: {$api_demand_reactive_full} - Fator de Potência: {$value_power_factor}" . PHP_EOL;
-
-            //if ($cont == 1) {
-            //var_dump($data);
-            //}
         }
         //Loop que percorre array com dados da API da Thingable
         /*foreach ($data_ as $data) {
