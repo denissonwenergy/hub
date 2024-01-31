@@ -43,7 +43,7 @@ function getDataAPI($device_id, $type_device)
         $return[0] = $array;
     }
 
-    var_dump($return);
+    //var_dump($return);
 
     curl_close($curl);
 
@@ -243,6 +243,7 @@ function processEnergy()
             if(sizeof($result)>0){
                 $site_name = $result[0]["site_name"];
             }
+           
             echo "Item: {$cont} - Site: {$site_name} - Medidor: {$meter_serial_number} / {$meter_description} - Porta RS485: {$port_rs485} - Instante: {$date} - Energia Ativa: {$api_energy_active_full} - Energia Reativa: {$api_energy_reactive_full} - Demanda Ativa: {$api_demand_active_full} - Demanda Reativa: {$api_demand_reactive_full} - Fator de Potência: {$value_power_factor}" . PHP_EOL;
 
             //if ($cont == 1) {
