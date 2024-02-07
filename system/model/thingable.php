@@ -70,6 +70,38 @@ class Thingable
         }
     }
 
+
+       /**
+     * Função que verifica sites ativos de energia vinculados aos demais clientes, exceto Santander
+     */
+    function getAllSitesDevicesGeneral()
+    {
+        try {
+            $pdo = $this->conn_class;
+            $sql  = "select * from telemetria.view_device_site_energy vdse " .
+            " inner join telemetria.branch_site bs on(vdse.site_id = bs.fk_site_id) " .
+            " inner join telemetria.branch b on(bs.fk_branch_id = b.branch_id) " .
+            " inner join telemetria.client_branch cb on(b.branch_id = cb.fk_branch_id) " .
+            " inner join telemetria.client c on(cb.fk_client_id = c.client_id) " .
+            " inner join telemetria.device_hardware dh on(vdse.device_id = dh.fk_device_id) " .
+			" inner join telemetria.hardware h on(dh.fk_hardware_id = h.hardware_id) " .
+            " where c.client_id <> 4 and site_device_end_of_link is null;";
+            $stm = $pdo->prepare($sql);            
+            $stm->execute();
+            $result = $stm->fetchAll(PDO::FETCH_ASSOC);
+
+            if ($result == true) {
+                return $result;
+            }
+
+            $pdo = null;
+        } catch (Exception $e) {
+            $erro = new Erro();
+            $erro->registerErroJSON($e->getMessage(), 'ERRO getAllSitesDevicesSantander()', './sigfox-monitor-error.json');
+            echo 'Erro encontrado (getAllSitesDevicesSantander()): ',  $e->getMessage(), "\n", $e->getLine(), "\n";
+        }
+    }
+
    /**
     * Função que pesquisa dados do site tendo como parâmetros: @device_id e @device_meter_serial_number
     */
