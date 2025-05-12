@@ -1,272 +1,345 @@
 <?php
 
-require_once('system/model/thingable.php');
+require_once('system/model/santander.php');
 require_once('system/functions/Email.php');
 
-/***
- * Função que retorna dados da API Rest da Thingable!
- * {Importante: device_id = identificador único do gateway}
- */
-function getDataAPI($device_id, $type_device)
+//notifyThingsboard("WEBHOOK ACIONADO", "ALERT");
+
+$santander = new Santander();
+
+// Captura o corpo JSON enviado pelo ThingsBoard (via Rule Chain)
+$get_json_data = json_decode(file_get_contents('php://input'), true);
+
+// Para testes - remover em produção
+/*
+$get_json_data = '{
+    "30003": 383.893798828125,
+    "30005": 2.3831329345703125,
+    "30007": -0.9794793128967285,
+    "30009": 1584.60107421875,
+    "30011": 319.36767578125,
+    "30013": -1552.083984375,
+    "30015": 60.050113677978516,
+    "30017": 221.32330322265625,
+    "30019": 221.59922790527344,
+    "30021": 222.0010223388672,
+    "30023": 77.24256134033203,
+    "30025": 68.51966857910156,
+    "30027": 77.00713348388672,
+    "30029": 3011.28955078125,
+    "30031": 11118.62890625,
+    "30033": -15682.001953125,
+    "30035": -16828.27734375,
+    "30037": 10340.5546875,
+    "30039": 6807.09033203125,
+    "30041": 17095.578125,
+    "30043": 15183.9052734375,
+    "30045": 17095.662109375,
+    "30047": "0.17614434659481049",
+    "30049": 0.7322641015052795,
+    "30051": -0.9173088669776917,
+    "30053": 51866.61328125,
+    "30055": 45147.63671875,
+    "30057": -72173.5859375,
+    "30059": -79655.4453125,
+    "30061": 23.553319931030273,
+    "30063": "0.008030286990106106",
+    "30065": 31.547693252563477,
+    "30067": 2.3403327465057373,
+    "30085": 0,
+    "30087": 0,
+    "30089": 366.5650329589844,
+    "30091": 311.7629699707031,
+    "30093": 407.240234375,
+    "ns": 2200920,
+    "timestamp": "1744513193574"
+}';
+
+$get_json_data = json_decode($get_json_data, true);
+*/
+
+$device_id = $get_json_data["ns"];
+$timestamp = convertEpochToDatetime(trim($get_json_data["timestamp"]));
+$meter_info = $santander->getMeterSite($device_id);
+
+// Conta a quantidade de chaves
+if(count($get_json_data)>=2 && $get_json_data["ns"] && $get_json_data["timestamp"]){
+    execute($get_json_data, $device_id, $timestamp, $meter_info, $santander);
+}
+
+
+
+function execute($get_json_data, $device_id, $timestamp, $meter_info, $santander)
 {
-    $token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJjbGllbnQiOiJ3LWVuZXJneSIsImRvbWFpbiI6IlRoaW5nYWJsZSIsIm5hbWVzcGFjZSI6InBsYXRmb3JtIiwidXNlcklkIjoiVVNFUl8xIiwiaXNBZG1pbiI6InRydWUifQ.RdBAIutY026hOGyNDlXrvvqv7vhV_VouAyMjMOvfpig";
 
-    $curl = curl_init();
+    // Verifica se veio algo válido
+    if (!$get_json_data || !isset($get_json_data['ns'])) {
+        http_response_code(400);
+        exit(json_encode(['error' => 'JSON inválido ou NS ausente.']));
+    }
 
-    $headers = array(
-        "Accept: application/json",
-        "Authorization: Bearer {$token} ",
-    );
 
-    $param_energy_active = "{$type_device}" . "%3A" . "{$device_id}" . "%3A" . "EA%2B"; //EX: KRON:DEVICE:PARAMETRO -> ENERGIA ATIVA
-    $param_energy_reactive = "{$type_device}" . "%3A" . "{$device_id}" . "%3A" . "ER%2B"; //EX: KRON:DEVICE:PARAMETRO  -> ENERGIA REATIVA
-    $param_energy_active_ = "{$type_device}" . "%3A" . "{$device_id}" . "%3A" . "EA"; //EX: KRON:DEVICE:PARAMETRO -> ENERGIA ATIVA
-    $param_energy_reactive_ = "{$type_device}" . "%3A" . "{$device_id}" . "%3A" . "ER"; //EX: KRON:DEVICE:PARAMETRO  -> ENERGIA REATIVA
-    $param_demand_active = "{$type_device}" . "%3A" . "{$device_id}" . "%3A" . "DA"; //EX: KRON:DEVICE:PARAMETRO -> DEMANDA ATIVA
-    $param_demand_reactive = "{$type_device}" . "%3A" . "{$device_id}" . "%3A" . "DR"; //EX: KRON:DEVICE:PARAMETRO -> DEMANDA REATIVA
-    $param_power_factor = "{$type_device}" . "%3A" . "{$device_id}" . "%3A" . "FP"; //EX: KRON:DEVICE:PARAMETRO -> FATOR DE POTÊNCIA
-    $param_active_power = "{$type_device}" . "%3A" . "{$device_id}" . "%3A" . "P0"; //EX: KRON:DEVICE:PARAMETRO -> POTÊNCIA ATIVA
-    $param_apparent_power = "{$type_device}" . "%3A" . "{$device_id}" . "%3A" . "S0"; //EX: KRON:DEVICE:PARAMETRO -> POTÊNCIA APARENTE
 
-    curl_setopt($curl, CURLOPT_HTTPHEADER, $headers);
-    curl_setopt($curl, CURLOPT_URL, "https://infra-prodv0.thingable.com/rtd-ws/tag-values?tags={$param_energy_active}&tags={$param_energy_reactive}&tags={$param_energy_active_}&tags={$param_energy_reactive_}&tags={$param_demand_active}&tags={$param_demand_reactive}&tags={$param_power_factor}&tags={$param_active_power}&tags={$param_apparent_power}");
-    curl_setopt($curl, CURLOPT_CUSTOMREQUEST, "GET");
-    curl_setopt($curl, CURLOPT_RETURNTRANSFER, true);
+    // 1. Salva no log (pode ser via model ou direto no banco)
+    $santander->saveLogRawData($get_json_data); // método fictício
 
-    $response = curl_exec($curl);
+    // Verifica se retornou um array válido
+    if (!is_array($meter_info) || !isset($meter_info[0]) || !isset($meter_info[0]["meter_name"])) {
+        http_response_code(500);
+        exit(json_encode(['error' => 'Não foi possível obter informações do medidor.']));
+    }
 
+    $meter_name = $meter_info[0]["meter_name"];
+    $parameters = $santander->getAllParametersMeters($meter_name);
+
+    // Lista de parâmetros permitidos
+    $allowed_parameters = ['EA+', 'ER+', 'EA', 'ER', 'DA', 'DR', 'FP', 'P0', 'S0'];
+
+    // Array para armazenar resultados temporários
+    $result = [];
+
+    // Primeiro, processar os parâmetros para criar a estrutura intermediária
+    foreach ($parameters as $param) {
+        $register = $param['meter_register'];
+        if (isset($get_json_data[$register])) {
+            $result[] = [
+                'meter_id'  => $param['meter_id'],
+                'parameter' => $param['meter_parameter'],
+                'register'  => $register,
+                'value'     => (float) $get_json_data[$register],
+            ];
+        }
+    }
+
+    // Agora transformar para o formato final desejado
+    $final_result = [];
+
+    foreach ($result as $item) {
+        // Verificar se o parâmetro está na lista de permitidos
+        if (isset($item['parameter']) && in_array($item['parameter'], $allowed_parameters)) {
+            // Construir a tag com o formato $meter_name:$device_id:$parameter
+            $tag = $meter_name . ":" . $device_id . ":" . $item['parameter'];
+
+            // Criar o item no formato desejado
+            $new_item = [
+                "tag" => $tag,
+                "uuid" => generateUUID(),
+                "value" => $item['value'],
+                "ts" => $timestamp,
+                "meta" => [
+                    "manufacturer" => strtolower($meter_name),
+                    "identification" => (int) $item['register'],
+                    "model" => "",
+                    "type" => "eletric-meter"
+                ]
+            ];
+
+            // Adicionar ao array final
+            $final_result[] = $new_item;
+        }
+    }
+
+    // Substituir o array result pelo final_result
+    $result = $final_result;
 
     $return = [];
 
-    $array = json_decode($response, true);
-    if (array_key_exists("message", $array)) {
-        //sendEmail("O device {$device_id} não possui registros no API Thingable", "tecnologia@wenergy.com.br", "Santander - API Thingable");
-    } else {
-        $return[0] = $array;
-    }
+    $return[0] = $result;
 
-    //var_dump($return);
+    //$json = json_encode($result, JSON_PRETTY_PRINT);
 
-    curl_close($curl);
-
-    // 1. Implementar aqui código que conecta na API da thingable e retorna lista com mensagens enviadas no dia de hoje
-    // 2. Ficar atento ao processo de paginação dos resultados porque é importante
-    // 3. Recomenda-se criar um [array] com todos os dados, de todas as páginas da API Rest, e retornar ao final desta função
-    // 4. Lembrar de implementar questão dos feriados no PONTA/FORA PONTA 
-    //$return[] = ["time" => 1702243800000, "energy_active_kwh" => 0, "energy_reactive_kvarh" => 0, "demand_active_kw" => 0, "demand_reactive_kvar" => 0];
-    return $return;
+    processEnergy($device_id, $meter_name, $santander, $return);
 }
-
 /**
  * Função que executa processo de inserção dos dados de consumo no database
  */
-function processEnergy()
+function processEnergy($device_id, $type_device, $santander, $json)
 {
-    $thingable = new Thingable();
 
-    $results = $thingable->getAllSitesDevicesSantander();
     $cont = 0;
-    foreach ($results as $result) {
-        $device_id = $result["device_id"];
-        $hardware_id = $result["hardware_id"];
-        $type_device = null;
 
-        switch ($hardware_id) {
-            case 5:
-                $type_device = "KRON";
-                break;
-            case 6:
-                $type_device = "ABB";
-                break;
-            case 7:
-                $type_device = "MERLIN";
-                break;
-            case 8:
-                $type_device = "SCHN";
-                break;
-            case 9:
-                $type_device = "KHOMP";
-                break;
-        }
+    $data_ = $json;
+    //var_dump($data_);
 
-        $data_ = getDataAPI(str_replace("M", "", $device_id), $type_device);
-        //var_dump($data_);
+    if (sizeof($data_) > 0) {
+        print("DEU CERTO");
+        foreach ($data_ as $data) {
 
-
-        if (sizeof($data_) > 0) {
-            foreach ($data_ as $data) {
-
-                $cont++;
-                $size = sizeof($data);
-                $api_energy_active_full = 0;
-                $api_energy_reactive_full = 0;
-                $api_demand_active_full = 0;
-                $api_demand_reactive_full = 0;
-                $api_power_factor = 0;
-                $api_active_power = 0;
-                $api_apparent_power = 0;
-                $value_energy_active = 0;
-                $value_energy_active_peak = 0;
-                $value_energy_active_out_peak = 0;
-                $value_energy_reactive = 0;
-                $value_energy_reactive_peak = 0;
-                $value_energy_reactive_out_peak = 0;
-                $value_demand_active = 0;
-                $value_demand_active_peak = 0;
-                $value_demand_active_outpeak = 0;
-                $value_demand_reactive = 0;
-                $value_demand_reactive_peak = 0;
-                $value_demand_reactive_out_peak = 0;
-                $value_power_factor = 0;
-                $meter_description =  null;
-                $meter_serial_number = null;
-                $port_rs485 = null;
-                $instante =  null;
-                $tag = null;
+            $cont++;
+            $size = sizeof($data);
+            $api_energy_active_full = 0;
+            $api_energy_reactive_full = 0;
+            $api_demand_active_full = 0;
+            $api_demand_reactive_full = 0;
+            $api_power_factor = 0;
+            $api_active_power = 0;
+            $api_apparent_power = 0;
+            $value_energy_active = 0;
+            $value_energy_active_peak = 0;
+            $value_energy_active_out_peak = 0;
+            $value_energy_reactive = 0;
+            $value_energy_reactive_peak = 0;
+            $value_energy_reactive_out_peak = 0;
+            $value_demand_active = 0;
+            $value_demand_active_peak = 0;
+            $value_demand_active_outpeak = 0;
+            $value_demand_reactive = 0;
+            $value_demand_reactive_peak = 0;
+            $value_demand_reactive_out_peak = 0;
+            $value_power_factor = 0;
+            $meter_description =  null;
+            $meter_serial_number = null;
+            $port_rs485 = null;
+            $instante =  null;
+            $tag = null;
 
 
-                for ($i = 0; $i < $size; $i++) {
+            for ($i = 0; $i < $size; $i++) {
 
-                    $tag = $data[$i]["tag"];
-                    $tag_ = explode(":", $tag);
-                    $meter_serial_number = $tag_[1];
-                    $meter_description = $data[$i]["meta"]["manufacturer"];
-                    $port_rs485 = $data[$i]["meta"]["identification"];
-                    $instante = $data[$i]["ts"];
+                $tag = $data[$i]["tag"];
+                $tag_ = explode(":", $tag);
+                $meter_serial_number = $tag_[1];
+                $meter_description = $data[$i]["meta"]["manufacturer"];
+                $port_rs485 = $data[$i]["meta"]["identification"];
+                $instante = $data[$i]["ts"];
 
-                    if (strpos($tag, ":EA")) {
-                        $api_energy_active_full = floatval($data[$i]["value"]);
-                    } else if (strpos($tag, ":EA+")) {
-                        $api_energy_active_full = floatval($data[$i]["value"]);
-                    } else if (strpos($tag, ":ER")) {
-                        $api_energy_reactive_full = floatval($data[$i]["value"]);
-                    } else if (strpos($tag, ":ER+")) {
-                        $api_energy_reactive_full = floatval($data[$i]["value"]);
-                    } else if (strpos($tag, ":DA")) {
-                        $api_demand_active_full = floatval($data[$i]["value"]);
-                    } else if (strpos($tag, ":DR")) {
-                        $api_demand_reactive_full = floatval($data[$i]["value"]);
-                    } else if (strpos($tag, ":FP")) {
-                        $api_power_factor = floatval($data[$i]["value"]);
-                    } else if (strpos($tag, ":P0")) {
-                        $api_active_power = floatval($data[$i]["value"]);
-                    } else if (strpos($tag, ":S0")) {
-                        $api_apparent_power = floatval($data[$i]["value"]);
-                    }
+                if (strpos($tag, ":EA")) {
+                    $api_energy_active_full = floatval($data[$i]["value"]);
+                } else if (strpos($tag, ":EA+")) {
+                    $api_energy_active_full = floatval($data[$i]["value"]);
+                } else if (strpos($tag, ":ER")) {
+                    $api_energy_reactive_full = floatval($data[$i]["value"]);
+                } else if (strpos($tag, ":ER+")) {
+                    $api_energy_reactive_full = floatval($data[$i]["value"]);
+                } else if (strpos($tag, ":DA")) {
+                    $api_demand_active_full = floatval($data[$i]["value"]);
+                } else if (strpos($tag, ":DR")) {
+                    $api_demand_reactive_full = floatval($data[$i]["value"]);
+                } else if (strpos($tag, ":FP")) {
+                    $api_power_factor = floatval($data[$i]["value"]);
+                } else if (strpos($tag, ":P0")) {
+                    $api_active_power = floatval($data[$i]["value"]);
+                } else if (strpos($tag, ":S0")) {
+                    $api_apparent_power = floatval($data[$i]["value"]);
                 }
-
-                //Validando fator de potência {FP = KW / KVA}
-                if ($api_power_factor != 0) {
-                    $value_power_factor = $api_power_factor;
-                } else {
-                    //echo "POTÊNCIA ATIVA: {$api_active_power} - POTÊNCIA APARENTE: {$api_apparent_power}" . PHP_EOL;
-                    if ($api_apparent_power != 0)
-                        $value_power_factor = $api_active_power / $api_apparent_power;
-                }
-
-                $site_id = $thingable->getSiteIDByDevice(formatDeviceID($meter_serial_number));
-                $date =  convertDatetimeUTCBR(strDatetimeSearch($instante));
-                $result =  $thingable->verifyConsumption($site_id, $date);
-
-                //var_dump($result);
-                //echo "Site: {$site_id} e Instante: {$date}" . PHP_EOL;
-
-                //Verifica se já existe consumo para esse [site_id] e [date]
-                if (sizeof($result) <= 0) {
-                    //Pega o último consumo no database
-                    $result = $thingable->getLastConsumption($site_id, $date);
-                    //Se houver registro no banco de dados
-                    if (sizeof($result) > 0) {
-
-                        $db_energy_active_full = floatval($result[0]["v_consumption_full_energy_active_kwh"]);
-                        $db_energy_reactive_full = floatval($result[0]["v_consumption_full_energy_reactive_kvarh"]);
-                        $db_demand_active_full = floatval($result[0]["v_consumption_full_demand_active_kw"]);
-                        $db_demand_reactive_full = floatval($result[0]["v_consumption_full_demand_reactive_kvar"]);
-
-                        if ($db_energy_active_full != null) {
-
-                            if ($type_device != "KHOMP") {
-                                $value_energy_active = $api_energy_active_full - $db_energy_active_full;
-                                $value_energy_reactive = $api_energy_reactive_full - $db_energy_reactive_full;
-                                $value_demand_active = $api_demand_active_full - $db_demand_active_full;
-                                $value_demand_reactive = $api_demand_reactive_full - $db_demand_reactive_full;
-                            } else {
-                                $value_energy_active = $api_energy_active_full;
-                                $value_energy_reactive = $api_energy_reactive_full;
-                                $value_demand_active = $api_demand_active_full;
-                                $value_demand_reactive = $api_demand_reactive_full;
-                            }
-
-                            if (verfiyTimePeak(strDatetimeSearch($date)) === true) {
-                                //Ponta
-                                $value_energy_active_peak = $value_energy_active;
-                                $value_energy_reactive_peak = $value_energy_reactive;
-                                $value_demand_active_peak = $value_demand_active;
-                                $value_demand_reactive_peak = $value_demand_reactive;
-                            } else {
-                                //Fora ponta
-                                $value_energy_active_out_peak = $value_energy_active;
-                                $value_energy_reactive_out_peak = $value_energy_reactive;
-                                $value_demand_active_outpeak = $value_demand_active;
-                                $value_demand_reactive_out_peak = $value_demand_reactive;
-                            }
-                        }
-                    } else {
-
-                        //Preencher array com registros aqui $array_data = [];
-
-                    }
-
-
-                    //echo "BR:" . convertDatetimeUTCBR(strDatetimeSearch($date)) . PHP_EOL;
-
-                    $array_data_message = [
-                        $value_energy_active,
-                        null,
-                        null,
-                        null,
-                        null,
-                        $date,
-                        null,
-                        $value_energy_active,
-                        $value_energy_active_peak,
-                        $value_energy_active_out_peak,
-                        $value_energy_reactive,
-                        $value_energy_reactive_peak,
-                        $value_energy_reactive_out_peak,
-                        $value_demand_active,
-                        $value_demand_active_peak,
-                        $value_demand_active_outpeak,
-                        $value_demand_reactive,
-                        $value_demand_reactive_peak,
-                        $value_demand_reactive_out_peak,
-                        $api_energy_active_full,
-                        $api_energy_reactive_full,
-                        $api_demand_active_full,
-                        $api_demand_reactive_full,
-                        $value_power_factor
-                    ];
-
-                    //FAZER INSERT AQUI
-                    $thingable->registerEnergyMessage(formatDeviceID($meter_serial_number), strtotime(strDatetimeSearch($date)), $tag, $port_rs485, $array_data_message);
-                }
-
-                $result = $thingable->getSiteDevice($device_id);
-                $site_name = "Não identificado";
-                if (sizeof($result) > 0) {
-                    $site_name = $result[0]["site_name"];
-                }
-
-                //if ($type_device == "KHOMP")
-                echo "Item: {$cont} - Site: {$site_name} - Medidor: {$meter_serial_number} / {$meter_description} - Porta RS485: {$port_rs485} - Instante: {$date} - Energia Ativa: {$api_energy_active_full} - Energia Reativa: {$api_energy_reactive_full} - Demanda Ativa: {$api_demand_active_full} - Demanda Reativa: {$api_demand_reactive_full} - Fator de Potência: {$value_power_factor}" . PHP_EOL;
-
-                //if ($cont == 1) {
-                //var_dump($data);
-                //}
             }
+
+            //Validando fator de potência {FP = KW / KVA}
+            if ($api_power_factor != 0) {
+                $value_power_factor = $api_power_factor;
+            } else {
+                //echo "POTÊNCIA ATIVA: {$api_active_power} - POTÊNCIA APARENTE: {$api_apparent_power}" . PHP_EOL;
+                if ($api_apparent_power != 0) {
+                    $value_power_factor = $api_active_power / $api_apparent_power;
+                }
+            }
+
+            $site_id = $santander->getSiteIDByDevice(formatDeviceID($meter_serial_number));
+            $date =  convertDatetimeUTCBR(strDatetimeSearch($instante));
+            $result =  $santander->verifyConsumption($site_id, $date);
+
+            //var_dump($result);
+            //echo "Site: {$site_id} e Instante: {$date}" . PHP_EOL;
+
+            //Verifica se já existe consumo para esse [site_id] e [date]
+            if (sizeof($result) <= 0) {
+                //Pega o último consumo no database
+                $result = $santander->getLastConsumption($site_id, $date);
+                //Se houver registro no banco de dados
+                if (sizeof($result) > 0) {
+
+                    $db_energy_active_full = floatval($result[0]["v_consumption_full_energy_active_kwh"]);
+                    $db_energy_reactive_full = floatval($result[0]["v_consumption_full_energy_reactive_kvarh"]);
+                    $db_demand_active_full = floatval($result[0]["v_consumption_full_demand_active_kw"]);
+                    $db_demand_reactive_full = floatval($result[0]["v_consumption_full_demand_reactive_kvar"]);
+
+                    if ($db_energy_active_full != null) {
+
+                        if ($type_device != "KHOMP") {
+                            $value_energy_active = $api_energy_active_full - $db_energy_active_full;
+                            $value_energy_reactive = $api_energy_reactive_full - $db_energy_reactive_full;
+                            $value_demand_active = $api_demand_active_full - $db_demand_active_full;
+                            $value_demand_reactive = $api_demand_reactive_full - $db_demand_reactive_full;
+                        } else {
+                            $value_energy_active = $api_energy_active_full;
+                            $value_energy_reactive = $api_energy_reactive_full;
+                            $value_demand_active = $api_demand_active_full;
+                            $value_demand_reactive = $api_demand_reactive_full;
+                        }
+
+                        if (verfiyTimePeak(strDatetimeSearch($date)) === true) {
+                            //Ponta
+                            $value_energy_active_peak = $value_energy_active;
+                            $value_energy_reactive_peak = $value_energy_reactive;
+                            $value_demand_active_peak = $value_demand_active;
+                            $value_demand_reactive_peak = $value_demand_reactive;
+                        } else {
+                            //Fora ponta
+                            $value_energy_active_out_peak = $value_energy_active;
+                            $value_energy_reactive_out_peak = $value_energy_reactive;
+                            $value_demand_active_outpeak = $value_demand_active;
+                            $value_demand_reactive_out_peak = $value_demand_reactive;
+                        }
+                    }
+                } else {
+
+                    //Preencher array com registros aqui $array_data = [];
+
+                }
+
+
+                //echo "BR:" . convertDatetimeUTCBR(strDatetimeSearch($date)) . PHP_EOL;
+
+                $array_data_message = [
+                    $value_energy_active,
+                    null,
+                    null,
+                    null,
+                    null,
+                    $date,
+                    null,
+                    $value_energy_active,
+                    $value_energy_active_peak,
+                    $value_energy_active_out_peak,
+                    $value_energy_reactive,
+                    $value_energy_reactive_peak,
+                    $value_energy_reactive_out_peak,
+                    $value_demand_active,
+                    $value_demand_active_peak,
+                    $value_demand_active_outpeak,
+                    $value_demand_reactive,
+                    $value_demand_reactive_peak,
+                    $value_demand_reactive_out_peak,
+                    $api_energy_active_full,
+                    $api_energy_reactive_full,
+                    $api_demand_active_full,
+                    $api_demand_reactive_full,
+                    $value_power_factor
+                ];
+
+                //FAZER INSERT AQUI
+                $santander->registerEnergyMessage(formatDeviceID($meter_serial_number), strtotime(strDatetimeSearch($date)), $tag, $port_rs485, $array_data_message);
+                notifyThingsboard("Registros de energia cadastrados no instante {$instante}", $device_id);
+            } else {
+                notifyThingsboard("Já existem dados de energia cadastrados no instante {$instante}", $device_id);
+            }
+
+            $result = $santander->getSiteDevice(formatDeviceID($device_id));
+            $site_name = "Não identificado";
+            if (sizeof($result) > 0) {
+                $site_name = $result[0]["site_name"];
+            }
+
+            //if ($type_device == "KHOMP")
+            echo "Item: {$cont} - Site: {$site_name} - Medidor: {$meter_serial_number} / {$meter_description} - Porta RS485: {$port_rs485} - Instante: {$date} - Energia Ativa: {$api_energy_active_full} - Energia Reativa: {$api_energy_reactive_full} - Demanda Ativa: {$api_demand_active_full} - Demanda Reativa: {$api_demand_reactive_full} - Fator de Potência: {$value_power_factor}" . PHP_EOL;
+
+            //if ($cont == 1) {
+            //var_dump($data);
+            //}
         }
-        //Loop que percorre array com dados da API da Thingable
-        /*foreach ($data_ as $data) {
+    }
+    //Loop que percorre array com dados da API da Thingable
+    /*foreach ($data_ as $data) {
 
             $date = convertEpochToDatetime($data["time"]);
 
@@ -299,9 +372,9 @@ function processEnergy()
                 $demand_reactive_peak_kvar = $demand_reactive_kvar;
             }
 
-            $site_id = $thingable->getSiteIDByDevice($device_id);
+            $site_id = $santander->getSiteIDByDevice($device_id);
 
-            $result_verify = $thingable->verifyConsumption($site_id, strDatetimeSearch($date));
+            $result_verify = $santander->verifyConsumption($site_id, strDatetimeSearch($date));
 
             if (sizeof($result_verify) > 0) {
                 echo "O consumo {$energy_active_kwh} no instante {$date} já existe" . PHP_EOL;
@@ -309,7 +382,6 @@ function processEnergy()
                 echo "O consumo {$energy_active_kwh} no instante {$date} NÃO existe" . PHP_EOL;
             }
         }*/
-    }
 }
 
 /**
@@ -328,13 +400,28 @@ function verfiyTimePeak($str)
 /**
  * Função que converte Epoch UNIX para Datetime
  */
-function convertEpochToDatetime($str)
+function convertEpochToDatetime2($str)
 {
     strlen($str) > 10 ? $str = substr($str, 0, 10) : null;
     $dt = new DateTime("@$str");
     $dt->sub(new DateInterval('PT3H'));
     $datetime = $dt->format('Y-m-d H:i:s');
     return $datetime;
+}
+
+function convertEpochToDatetime_back($timestampMs)
+{
+    $timestampSec = $timestampMs / 1000;
+    $dt = new DateTime("@$timestampSec"); // já é UTC
+    $dt->setTimezone(new DateTimeZone('UTC')); // garante UTC explícito
+    return $dt->format('Y-m-d H:i:s');
+}
+
+function convertEpochToDatetime($timestampMs) {
+    $timestampSec = $timestampMs / 1000;
+    $dt = new DateTime("@$timestampSec"); // UTC
+    $dt->setTimezone(new DateTimeZone("America/Sao_Paulo")); // Definido explicitamente
+    return $dt->format('Y-m-d H:i:s');
 }
 
 function convertDatetimeUTCBR($str)
@@ -363,4 +450,56 @@ function strDatetimeSearch($str)
     //return substr(trim($str), 0, 16);
 }
 
-processEnergy();
+// Função para gerar UUID v4
+function generateUUID()
+{
+    $data = random_bytes(16);
+    $data[6] = chr(ord($data[6]) & 0x0f | 0x40);
+    $data[8] = chr(ord($data[8]) & 0x3f | 0x80);
+
+    return vsprintf('%s%s-%s-%s-%s-%s%s%s', str_split(bin2hex($data), 4));
+}
+
+function notifyThingsboard($message, $device_id)
+{
+
+    $thingsboardUrl = "https://hml.thingsboard.wenergy.com.br/api/v1/Aq2HCKw0v8hgKcGl8xWD/telemetry";
+
+    // Corpo da requisição (JSON com telemetria de alarme)
+    $payload = [
+        "GatewaySantander" => [
+            [
+                "ts" => round(microtime(true) * 1000),
+                "values" => [
+                    "gateway_alarm" => true,
+                    "message" => "{$device_id}:{$message}"
+                ]
+            ]
+        ]
+    ];
+
+    // Inicializa cURL
+    $ch = curl_init($thingsboardUrl);
+
+    // Configurações da requisição
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_POST, true);
+    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+    curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/json']);
+    curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($payload));
+
+    // Executa requisição
+    $response = curl_exec($ch);
+
+    // Verifica erros
+    if (curl_errno($ch)) {
+        echo 'Erro: ' . curl_error($ch);
+    } else {
+        echo "Resposta do ThingsBoard: " . $response;
+    }
+
+    // Finaliza cURL
+    curl_close($ch);
+}
+
+//processEnergy();

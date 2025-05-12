@@ -3,39 +3,42 @@
 date_default_timezone_set('America/Sao_Paulo');
 require './system/functions/erro.php';
 
-class Thingable
+ini_set('display_errors', 1);
+ini_set('display_startup_errors', 1);
+error_reporting(E_ALL);
+
+
+class Santander
 {
+    public ?PDO $pdoThingsboard;
+    public ?PDO $pdoTelemetria;
 
-    protected $conn_class;
-
-    /**
-     * Construtor da classe SigFox
-     */
     public function __construct()
     {
-        try {
-            require './system/database/connection.php';
-            $this->conn_class = $conn;
-        } catch (Exception $e) {
-            $erro = new Erro();
-            $erro->registerErroJSON($e->getMessage(), 'ERRO __construct()', './sigfox-monitor-error.json');
-            echo 'Erro encontrado (__construct()): ',  $e->getMessage(), "\n";
-        }
+
+        $connections = require './system/database/connection.php';
+
+        // Atribui de forma segura
+        $this->pdoThingsboard = $connections['thingsboard'];
+        $this->pdoTelemetria  = $connections['telemetria'];
     }
 
     /**
-     * Função que fecha conexão com DB
+     * Fecha as conexões PDO
      */
     public function closeConnection()
     {
         try {
-            $this->conn_class = null;
+            $this->pdoThingsboard = null;
+            $this->pdoTelemetria  = null;
         } catch (Exception $e) {
             $erro = new Erro();
             $erro->registerErroJSON($e->getMessage(), 'ERRO closeConnection()', './sigfox-monitor-error.json');
-            echo 'Erro encontrado (closeConnection()): ',  $e->getMessage(), "\n";
+            echo 'Erro encontrado (closeConnection()): ', $e->getMessage(), "\n";
         }
     }
+
+    function saveLogRawData($json) {}
 
 
 
@@ -45,16 +48,16 @@ class Thingable
     function getAllSitesDevicesSantander()
     {
         try {
-            $pdo = $this->conn_class;
+            $pdo = $this->pdoTelemetria;
             $sql  = "select * from telemetria.view_device_site_energy vdse " .
-            " inner join telemetria.branch_site bs on(vdse.site_id = bs.fk_site_id) " .
-            " inner join telemetria.branch b on(bs.fk_branch_id = b.branch_id) " .
-            " inner join telemetria.client_branch cb on(b.branch_id = cb.fk_branch_id) " .
-            " inner join telemetria.client c on(cb.fk_client_id = c.client_id) " .
-            " inner join telemetria.device_hardware dh on(vdse.device_id = dh.fk_device_id) " .
-			" inner join telemetria.hardware h on(dh.fk_hardware_id = h.hardware_id) " .
-            " where c.client_id = 4 and site_device_end_of_link is null;";
-            $stm = $pdo->prepare($sql);            
+                " inner join telemetria.branch_site bs on(vdse.site_id = bs.fk_site_id) " .
+                " inner join telemetria.branch b on(bs.fk_branch_id = b.branch_id) " .
+                " inner join telemetria.client_branch cb on(b.branch_id = cb.fk_branch_id) " .
+                " inner join telemetria.client c on(cb.fk_client_id = c.client_id) " .
+                " inner join telemetria.device_hardware dh on(vdse.device_id = dh.fk_device_id) " .
+                " inner join telemetria.hardware h on(dh.fk_hardware_id = h.hardware_id) " .
+                " where c.client_id = 4 and site_device_end_of_link is null;";
+            $stm = $pdo->prepare($sql);
             $stm->execute();
             $result = $stm->fetchAll(PDO::FETCH_ASSOC);
 
@@ -71,22 +74,95 @@ class Thingable
     }
 
 
-       /**
+    /**
+     * Função que retorna todos os parâmetros de medidor definido
+     */
+    function getAllParametersMeters($meter_name)
+    {
+        try {
+            $pdo = $this->pdoThingsboard;
+            $sql  = "select * from thingsboard.meter where meter_name = ?";
+            $stm = $pdo->prepare($sql);
+            $stm->bindValue(1, $meter_name);
+            $stm->execute();
+            $result = $stm->fetchAll(PDO::FETCH_ASSOC);
+
+            if ($result == true) {
+                return $result;
+            }
+
+            $pdo = null;
+        } catch (Exception $e) {
+            $erro = new Erro();
+            $erro->registerErroJSON($e->getMessage(), 'ERRO getAllParametersMeters()', './sigfox-monitor-error.json');
+            echo 'Erro encontrado (getAllParametersMeters()): ',  $e->getMessage(), "\n", $e->getLine(), "\n";
+        }
+    }
+
+
+    /**
+     * Função que retorna dados do site x device x hardware
+     */
+    function getMeterSite($device_id)
+    {
+        try {
+            if (!$this->pdoTelemetria instanceof PDO) {
+                throw new Exception('Conexão PDO com telemetria não foi inicializada.');
+            }
+
+            $sql = "
+            SELECT
+                CASE
+                    WHEN hardware_id = 5 THEN 'KRON'
+                    WHEN hardware_id = 6 THEN 'ABB'
+                    WHEN hardware_id = 7 THEN 'MERLIN'
+                    WHEN hardware_id = 8 THEN 'SCHN'
+                    WHEN hardware_id = 9 THEN 'KHOMP'
+                    ELSE NULL
+                END AS meter_name, 
+                hardware_id,
+                hardware_name, 
+                device_id,
+                SUBSTRING(device_id FROM 2) AS device_id_,
+                site_name,
+                site_id,
+                site_active
+            FROM telemetria.view_site_resource
+            WHERE resource_id = 2 AND SUBSTRING(device_id FROM 2) = ?
+        ";
+
+            $stm = $this->pdoTelemetria->prepare($sql);
+            $stm->bindValue(1, $device_id);
+            $stm->execute();
+
+            $result = $stm->fetchAll(PDO::FETCH_ASSOC);
+
+            return $result ?: null;
+        } catch (Exception $e) {
+            $erro = new Erro();
+            $erro->registerErroJSON($e->getMessage(), 'ERRO getMeterSite()', './sigfox-monitor-error.json');
+            echo 'Erro encontrado (getMeterSite()): ',  $e->getMessage(), "\n", 'Linha: ', $e->getLine(), "\n";
+            return null;
+        }
+    }
+
+
+    /**
      * Função que verifica sites ativos de energia vinculados aos demais clientes, exceto Santander
      */
     function getAllSitesDevicesGeneral()
     {
         try {
-            $pdo = $this->conn_class;
+            $pdo = $this->pdoTelemetria;
             $sql  = "select * from telemetria.view_device_site_energy vdse " .
-            " inner join telemetria.branch_site bs on(vdse.site_id = bs.fk_site_id) " .
-            " inner join telemetria.branch b on(bs.fk_branch_id = b.branch_id) " .
-            " inner join telemetria.client_branch cb on(b.branch_id = cb.fk_branch_id) " .
-            " inner join telemetria.client c on(cb.fk_client_id = c.client_id) " .
-            " inner join telemetria.device_hardware dh on(vdse.device_id = dh.fk_device_id) " .
-			" inner join telemetria.hardware h on(dh.fk_hardware_id = h.hardware_id) " .
-            " where c.client_id <> 4 and site_device_end_of_link is null;";
-            $stm = $pdo->prepare($sql);            
+                " inner join telemetria.branch_site bs on(vdse.site_id = bs.fk_site_id) " .
+                " inner join telemetria.branch b on(bs.fk_branch_id = b.branch_id) " .
+                " inner join telemetria.client_branch cb on(b.branch_id = cb.fk_branch_id) " .
+                " inner join telemetria.client c on(cb.fk_client_id = c.client_id) " .
+                " inner join telemetria.device_hardware dh on(vdse.device_id = dh.fk_device_id) " .
+                " inner join telemetria.hardware h on(dh.fk_hardware_id = h.hardware_id) " .
+                " where c.client_id <> 4 and site_device_end_of_link is null;";
+            $stm = $pdo->prepare($sql);
             $stm->execute();
             $result = $stm->fetchAll(PDO::FETCH_ASSOC);
 
@@ -102,15 +178,15 @@ class Thingable
         }
     }
 
-   /**
-    * Função que pesquisa dados do site tendo como parâmetros: @device_id e @device_meter_serial_number
-    */
+    /**
+     * Função que pesquisa dados do site tendo como parâmetros: @device_id e @device_meter_serial_number
+     */
     function getDeviceEnergy($device_id, $device_meter_serial_number)
     {
         try {
-            $pdo = $this->conn_class;
+            $pdo = $this->pdoTelemetria;
             $sql  = "SELECT * FROM telemetria.view_device_site_energy";
-            $stm = $pdo->prepare($sql);            
+            $stm = $pdo->prepare($sql);
             $stm->execute();
             $result = $stm->fetchAll(PDO::FETCH_ASSOC);
 
@@ -127,16 +203,16 @@ class Thingable
     }
 
     /**
-    * Função que pesquisa dados do site em relação ao processo tarifário, picos, afins pela concessionária do site
-    */
+     * Função que pesquisa dados do site em relação ao processo tarifário, picos, afins pela concessionária do site
+     */
     function getEnergyConfig($site_id)
     {
         try {
-            $pdo = $this->conn_class;
+            $pdo = $this->pdoTelemetria;
             $sql  = "SELECT * FROM telemetria.config where config_table_name = 'site' and config_table_id = ? and config_type = ?";
-            $stm = $pdo->prepare($sql);  
+            $stm = $pdo->prepare($sql);
             $stm->bindValue(1, $site_id);
-            $stm->bindValue(2, '');          
+            $stm->bindValue(2, '');
             $stm->execute();
             $result = $stm->fetchAll(PDO::FETCH_ASSOC);
 
@@ -161,7 +237,7 @@ class Thingable
         try {
             $date = explode(" ", $date);
             $date_hours = substr(trim($date[1]), 0, 5);
-            $pdo = $this->conn_class;
+            $pdo = $this->pdoTelemetria;
             $sql  = "SELECT * FROM telemetria.view_client_consumption WHERE v_site_id = ? " .
                 " and to_char(v_consumption_datetime_message, 'YYYY-MM-DD') = '{$date[0]}' " .
                 " and to_char(v_consumption_time_message, 'HH24:MI') = '{$date_hours}' ";
@@ -176,13 +252,13 @@ class Thingable
     }
 
 
-      /**
+    /**
      * Função que faz delete de registro antigo de consumo do site
      */
     public function deleteOldRegisters($consumption_id)
     {
         try {
-            $pdo = $this->conn_class;
+            $pdo = $this->pdoTelemetria;
             $sql = 'DELETE FROM telemetria.consumption WHERE consumption_id = ?';
             $stm = $pdo->prepare($sql);
             $stm->bindValue(1, $consumption_id);
@@ -201,9 +277,10 @@ class Thingable
     /**
      * Função que retorna dados do site vinculados ao device
      */
-    public function getSiteDevice($device_id){
+    public function getSiteDevice($device_id)
+    {
         try {
-            $pdo = $this->conn_class;
+            $pdo = $this->pdoTelemetria;
             $sql  = "select * from telemetria.view_site_device where site_device_end_of_link is null and device_id = ?";
             $stm = $pdo->prepare($sql);
             $stm->bindValue(1, $device_id);
@@ -224,7 +301,7 @@ class Thingable
     {
         try {
             $date = explode(" ", $date);
-            $pdo = $this->conn_class;
+            $pdo = $this->pdoTelemetria;
             $sql  = "SELECT * FROM telemetria.view_client_consumption WHERE v_site_id = ? " .
                 " ORDER BY v_consumption_datetime DESC LIMIT 1  ; ";
             $stm = $pdo->prepare($sql);
@@ -243,7 +320,7 @@ class Thingable
     public function getSiteIDByDevice($device_id)
     {
         try {
-            $pdo = $this->conn_class;
+            $pdo = $this->pdoTelemetria;
             $sql  = "SELECT site_id FROM telemetria.view_site_device WHERE site_device_end_of_link is null and device_id = ? LIMIT 1";
             $stm = $pdo->prepare($sql);
             $stm->bindValue(1, $device_id);
@@ -272,7 +349,7 @@ class Thingable
 
         try {
 
-            $pdo = $this->conn_class;
+            $pdo = $this->pdoTelemetria;
             $sql = 'INSERT INTO telemetria.message(message_date_register, message_data, message_time, message_seq_number, message_device_id) VALUES (?, ?, ?, ?, ?)';
             $stm = $pdo->prepare($sql);
             $stm->bindValue(1, 'now()');
@@ -289,7 +366,7 @@ class Thingable
                 $site_id = $this->getSiteIDByDevice($device_id);
                 $this->registerSiteConsumption($site_id, $consumption_id);
                 $this->registerDeviceMessage($device_id, $getLastId);
-            }
+            } 
         } catch (Exception $e) {
             $erro = new Erro();
             $erro->registerErroJSON($e->getMessage(), 'ERRO registerEnergyMessage()', './sigfox-monitor-error.json');
@@ -303,7 +380,7 @@ class Thingable
     public function registerConsumptionEnergy($lastInsertIdMessage, $array_data_message)
     {
         try {
-            $pdo = $this->conn_class;
+            $pdo = $this->pdoTelemetria;
             $sql = 'INSERT INTO telemetria.consumption(consumption_date_register, consumption_value,  consumption_reverse_pules, consumption_circuit_temperature, consumption_battery_voltage, consumption_flags, consumption_datetime, consumption_type, consumption_full_value, consumption_energy_active_kwh, consumption_energy_active_peak_kwh, consumption_energy_active_out_peak_kwh, consumption_energy_reactive_kvarh, consumption_energy_reactive_peak_kvarh, consumption_energy_reactive_out_peak_kvarh, consumption_demand_active_kw, consumption_demand_active_peak_kw, consumption_demand_active_out_peak_kw, consumption_demand_reactive_kvar, consumption_demand_reactive_peak_kvar, consumption_demand_reactive_out_peak_kvar, consumption_full_energy_active_kwh, consumption_full_energy_reactive_kvarh, consumption_full_demand_active_kw, consumption_full_demand_reactive_kvar, consumption_power_factor
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)';
             $stm = $pdo->prepare($sql);
@@ -339,7 +416,7 @@ class Thingable
             if ($result == true) {
                 $this->registerMessageConsumption($lastInsertIdMessage, $getLastId);
                 return intval($getLastId);
-            }
+            } 
         } catch (Exception $e) {
             $erro = new Erro();
             $erro->registerErroJSON($e->getMessage(), 'ERRO registerConsumptionEnergy()', './sigfox-monitor-error.json');
@@ -353,7 +430,7 @@ class Thingable
     public function registerDeviceMessage($device_id, $message_id)
     {
         try {
-            $pdo = $this->conn_class;
+            $pdo = $this->pdoTelemetria;
             $sql = 'INSERT INTO telemetria.device_message(fk_device_id, fk_message_id) VALUES (?, ?)';
             $stm = $pdo->prepare($sql);
             $stm->bindValue(1, $device_id);
@@ -364,10 +441,14 @@ class Thingable
                 return true;
             }
             $pdo = null;
+            //fyThingsboard("RESULT POSITIVO  registerDeviceMessage()", "telemetria");
         } catch (Exception $e) {
+            //notifyThingsboard("RESULT NEGATIVO  registerDeviceMessage()", "telemetria");
             $erro = new Erro();
             $erro->registerErroJSON($e->getMessage(), 'ERRO registerDeviceMessage()', './sigfox-monitor-error.json');
             echo 'Erro encontrado (registerDeviceMessage()): ',  $e->getMessage(), "\n", $e->getLine(), "\n";
+        }finally{
+            //notifyThingsboard("RESULT FINALLY  registerDeviceMessage()", "telemetria");
         }
     }
 
@@ -377,7 +458,7 @@ class Thingable
     public function registerMessageConsumption($getIdMessage, $getIdConsumption)
     {
         try {
-            $pdo = $this->conn_class;
+            $pdo = $this->pdoTelemetria;
             $sql = 'INSERT INTO telemetria.message_consumption(fk_message_id, fk_consumption_id) VALUES (?, ?)';
             $stm = $pdo->prepare($sql);
             $stm->bindValue(1, $getIdMessage);
@@ -397,7 +478,7 @@ class Thingable
     public function registerSiteConsumption($site_id, $consumption_id)
     {
         try {
-            $pdo = $this->conn_class;
+            $pdo = $this->pdoTelemetria;
             $sql = 'INSERT INTO telemetria.site_consumption(fk_site_id, fk_consumption_id) VALUES (?, ?)';
             $stm = $pdo->prepare($sql);
             $stm->bindValue(1, $site_id);
@@ -417,7 +498,7 @@ class Thingable
     public function getLastConsumptionDevice($device_id)
     {
         try {
-            $pdo = $this->conn_class;
+            $pdo = $this->pdoTelemetria;
             $site_id = $this->getSiteIDByDevice($device_id);
             $sql  = "SELECT * FROM telemetria.consumption c " .
                 " INNER JOIN telemetria.message_consumption mc on (c.consumption_id = mc.fk_consumption_id) " .
@@ -436,5 +517,47 @@ class Thingable
             $erro->registerErroJSON($e->getMessage(), 'ERRO getLastConsumptionDevice()', './sigfox-monitor-error.json');
             echo 'Erro encontrado (getLastConsumptionDevice()): ',  $e->getMessage(), "\n", $e->getLine(), "\n";
         }
+    }
+
+    function notifyThingsboard($message, $device_id)
+    {
+
+        $thingsboardUrl = "https://hml.thingsboard.wenergy.com.br/api/v1/Aq2HCKw0v8hgKcGl8xWD/telemetry";
+
+        // Corpo da requisição (JSON com telemetria de alarme)
+        $payload = [
+            "GatewaySantander" => [
+                [
+                    "ts" => round(microtime(true) * 1000),
+                    "values" => [
+                        "gateway_alarm" => true,
+                        "message" => "{$device_id}:{$message}"
+                    ]
+                ]
+            ]
+        ];
+
+        // Inicializa cURL
+        $ch = curl_init($thingsboardUrl);
+
+        // Configurações da requisição
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_POST, true);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+        curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/json']);
+        curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($payload));
+
+        // Executa requisição
+        $response = curl_exec($ch);
+
+        // Verifica erros
+        if (curl_errno($ch)) {
+            echo 'Erro: ' . curl_error($ch);
+        } else {
+            echo "Resposta do ThingsBoard: " . $response;
+        }
+
+        // Finaliza cURL
+        curl_close($ch);
     }
 }
