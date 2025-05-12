@@ -319,10 +319,7 @@ function processEnergy($device_id, $type_device, $santander, $json)
 
                 //FAZER INSERT AQUI
                 $santander->registerEnergyMessage(formatDeviceID($meter_serial_number), strtotime(strDatetimeSearch($date)), $tag, $port_rs485, $array_data_message);
-                notifyThingsboard("Registros de energia cadastrados no instante {$instante}", $device_id);
-            } else {
-                notifyThingsboard("Já existem dados de energia cadastrados no instante {$instante}", $device_id);
-            }
+            } 
 
             $result = $santander->getSiteDevice(formatDeviceID($device_id));
             $site_name = "Não identificado";
